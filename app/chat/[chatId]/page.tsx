@@ -64,7 +64,7 @@ export default function ChatPage() {
   // Initialize socket connection
   useEffect(() => {
     if (!socket) {
-      socket = io("http://localhost:5000", {
+      socket = io("https://chat-backend-nskn.onrender.com", {
         transports: ["websocket", "polling"],
         autoConnect: false,
       })
