@@ -1,11 +1,206 @@
+// "use client"
+
+// import { useState, useEffect } from "react"
+// import { LoginForm } from "@/components/login-form"
+// import { SignupForm } from "@/components/signup-form"
+// import { useRouter } from "next/navigation"
+// import { MessageCircle, Shield, Smartphone } from "lucide-react"
+
+// export default function Home() {
+//   const [user, setUser] = useState<string | null>(null)
+//   const [currentView, setCurrentView] = useState<"login" | "signup">("login")
+//   const router = useRouter()
+
+//   useEffect(() => {
+//     const savedUser = localStorage.getItem("chatAppUser")
+//     if (savedUser) {
+//       setUser(savedUser)
+//       router.push("/chat")
+//     }
+//   }, [router])
+
+//   const handleLogin = (username: string) => {
+//     localStorage.setItem("chatAppUser", username)
+//     router.push("/chat")
+//   }
+
+//   return (
+//     <div className="min-h-screen flex items-center justify-center bg-gray-100">
+//       <style jsx>{`
+//         .left-bg {
+//           background: linear-gradient(135deg, #128C7E 0%, #25D366 100%);
+//           position: relative;
+//           overflow: hidden;
+//         }
+//         .blur-circle {
+//           position: absolute;
+//           border-radius: 9999px;
+//           filter: blur(24px);
+//           opacity: 0.5;
+//           z-index: 0;
+//         }
+//         .crown {
+//           position: absolute;
+//           top: 18px;
+//           left: 18px;
+//           z-index: 2;
+//           background: rgba(255,255,255,0.7);
+//           border-radius: 9999px;
+//           padding: 6px;
+//           box-shadow: 0 2px 8px 0 rgba(0,0,0,0.08);
+//         }
+//       `}</style>
+//       <div className="w-full max-w-4xl flex rounded-3xl overflow-hidden shadow-2xl">
+//         {/* Left Side */}
+//         <div className="relative w-1/2 min-h-[540px] left-bg flex flex-col justify-center items-center">
+//           {/* Blurred Circles */}
+//           <span className="blur-circle" style={{ width: 180, height: 180, top: 40, left: 30, background: "#075E54" }} />
+//           <span
+//             className="blur-circle"
+//             style={{ width: 120, height: 120, bottom: 60, left: 60, background: "#128C7E" }}
+//           />
+//           <span
+//             className="blur-circle"
+//             style={{ width: 100, height: 100, top: 200, right: 40, background: "#34B7F1" }}
+//           />
+//           {/* Crown Icon */}
+//           <span className="crown">
+//             <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+//               <circle cx="12" cy="12" r="12" fill="#fff" />
+//               <path d="M6 16L7.5 8L12 13L16.5 8L18 16H6Z" fill="#25D366" />
+//               <circle cx="7.5" cy="7.5" r="1.5" fill="#128C7E" />
+//               <circle cx="16.5" cy="7.5" r="1.5" fill="#128C7E" />
+//               <circle cx="12" cy="5" r="1.5" fill="#128C7E" />
+//             </svg>
+//           </span>
+//           {/* Welcome Text */}
+//           <div className="relative z-10 px-8 text-center">
+//             <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-4 drop-shadow">
+//               Welcome to WhatsApp Clone
+//             </h1>
+//             <p className="text-white/90 text-base md:text-lg mb-6">
+//               Chat instantly with friends and AI.
+//               <br />
+//               Enjoy a modern, secure, and fun chat experience.
+//             </p>
+
+//             {/* Feature Icons */}
+//             <div className="flex justify-center gap-8 mt-8">
+//               <div className="flex flex-col items-center">
+//                 <div className="bg-white/20 p-3 rounded-full mb-2">
+//                   <MessageCircle className="h-6 w-6 text-white" />
+//                 </div>
+//                 <span className="text-white text-sm">Messaging</span>
+//               </div>
+//               <div className="flex flex-col items-center">
+//                 <div className="bg-white/20 p-3 rounded-full mb-2">
+//                   <Smartphone className="h-6 w-6 text-white" />
+//                 </div>
+//                 <span className="text-white text-sm">Mobile Ready</span>
+//               </div>
+//               <div className="flex flex-col items-center">
+//                 <div className="bg-white/20 p-3 rounded-full mb-2">
+//                   <Shield className="h-6 w-6 text-white" />
+//                 </div>
+//                 <span className="text-white text-sm">Secure</span>
+//               </div>
+//             </div>
+//           </div>
+//         </div>
+
+//         {/* Right Side */}
+//         <div className="w-1/2 bg-white flex flex-col justify-center px-10 py-12 relative overflow-hidden">
+//           {/* Decorative Dots */}
+//           <span className="absolute w-3 h-3 bg-green-300 rounded-full left-2 top-8"></span>
+//           <span className="absolute w-2 h-2 bg-green-200 rounded-full right-8 top-4"></span>
+//           <span className="absolute w-2 h-2 bg-green-200 rounded-full left-10 bottom-10"></span>
+//           <span className="absolute w-2 h-2 bg-green-200 rounded-full right-8 bottom-8"></span>
+//           <span className="absolute w-2 h-2 bg-green-400 rounded-full left-1/2 top-1/4"></span>
+//           {/* Tabs */}
+//           <div className="mb-8 text-center flex flex-col items-center">
+//             <div className="flex gap-8 mb-2">
+//               <button
+//                 className={`text-lg font-semibold pb-1 transition-all ${
+//                   currentView === "login"
+//                     ? "text-green-600 border-b-2 border-green-500"
+//                     : "text-gray-400 border-b-2 border-transparent"
+//                 }`}
+//                 onClick={() => setCurrentView("login")}
+//               >
+//                 Log in
+//               </button>
+//               <button
+//                 className={`text-lg font-semibold pb-1 transition-all ${
+//                   currentView === "signup"
+//                     ? "text-green-600 border-b-2 border-green-500"
+//                     : "text-gray-400 border-b-2 border-transparent"
+//                 }`}
+//                 onClick={() => setCurrentView("signup")}
+//               >
+//                 Sign Up
+//               </button>
+//             </div>
+//           </div>
+//           {/* Form */}
+//           <div>
+//             {currentView === "login" ? (
+//               <LoginForm
+//                 onLogin={handleLogin}
+//               />
+//             ) : (
+//               <SignupForm
+//                 onSignup={handleLogin}
+//               />
+//             )}
+//           </div>
+//           {/* Footer */}
+//           <div className="text-center text-sm text-gray-400 mt-8">
+//             {currentView === "login" ? (
+//               <>
+//                 Don't have any account?{" "}
+//                 <button
+//                   className="text-green-600 font-semibold hover:underline"
+//                   onClick={() => setCurrentView("signup")}
+//                 >
+//                   Sign Up
+//                 </button>
+//               </>
+//             ) : (
+//               <>
+//                 Already have an account?{" "}
+//                 <button
+//                   className="text-green-600 font-semibold hover:underline"
+//                   onClick={() => setCurrentView("login")}
+//                 >
+//                   Log in
+//                 </button>
+//               </>
+//             )}
+//           </div>
+
+//           {/* Terms */}
+//           <p className="text-xs text-gray-400 text-center mt-6">
+//             By continuing, you agree to our Terms of Service and Privacy Policy
+//           </p>
+//         </div>
+//       </div>
+//     </div>
+//   )
+// }
+
+
+
+
+
+
+
 "use client"
 
 import { useState, useEffect } from "react"
 import { LoginForm } from "@/components/login-form"
 import { SignupForm } from "@/components/signup-form"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
+import { MessageCircle, Shield, Smartphone } from "lucide-react"
 
 export default function Home() {
   const [user, setUser] = useState<string | null>(null)
@@ -18,42 +213,140 @@ export default function Home() {
       setUser(savedUser)
       router.push("/chat")
     }
-  }, [])
+  }, [router])
 
   const handleLogin = (username: string) => {
     localStorage.setItem("chatAppUser", username)
     router.push("/chat")
   }
 
-
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardContent className="p-6">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.893 3.386" />
-              </svg>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="w-full max-w-4xl flex rounded-3xl overflow-hidden shadow-2xl">
+        {/* Left Side */}
+        <div className="relative w-1/2 min-h-[540px] bg-gradient-to-br from-green-600 to-green-500 flex flex-col justify-center items-center">
+          {/* Blurred Circles */}
+          <div className="absolute w-45 h-45 bg-green-700/30 rounded-full blur-2xl top-10 left-8" />
+          <div className="absolute w-30 h-30 bg-green-800/30 rounded-full blur-2xl bottom-15 left-15" />
+          <div className="absolute w-25 h-25 bg-blue-400/30 rounded-full blur-2xl top-50 right-10" />
+
+          {/* Crown Icon */}
+          <div className="absolute top-5 left-5 bg-white/20 p-2 rounded-full">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="12" fill="#fff" />
+              <path d="M6 16L7.5 8L12 13L16.5 8L18 16H6Z" fill="#25D366" />
+              <circle cx="7.5" cy="7.5" r="1.5" fill="#128C7E" />
+              <circle cx="16.5" cy="7.5" r="1.5" fill="#128C7E" />
+              <circle cx="12" cy="5" r="1.5" fill="#128C7E" />
+            </svg>
+          </div>
+
+          {/* Welcome Text */}
+          <div className="relative z-10 px-8 text-center">
+            <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-4 drop-shadow">
+              Welcome to WhatsApp Clone
+            </h1>
+            <p className="text-white/90 text-base md:text-lg mb-6">
+              Chat instantly with friends and AI.
+              <br />
+              Enjoy a modern, secure, and fun chat experience.
+            </p>
+
+            {/* Feature Icons */}
+            <div className="flex justify-center gap-8 mt-8">
+              <div className="flex flex-col items-center">
+                <div className="bg-white/20 p-3 rounded-full mb-2">
+                  <MessageCircle className="h-6 w-6 text-white" />
+                </div>
+                <span className="text-white text-sm">Messaging</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <div className="bg-white/20 p-3 rounded-full mb-2">
+                  <Smartphone className="h-6 w-6 text-white" />
+                </div>
+                <span className="text-white text-sm">Mobile Ready</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <div className="bg-white/20 p-3 rounded-full mb-2">
+                  <Shield className="h-6 w-6 text-white" />
+                </div>
+                <span className="text-white text-sm">Secure</span>
+              </div>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">WhatsApp Clone</h1>
-            <p className="text-gray-600">Connect with friends and AI</p>
+          </div>
+        </div>
+
+        {/* Right Side */}
+        <div className="w-1/2 bg-white flex flex-col justify-center px-10 py-12 relative overflow-hidden">
+          {/* Decorative Dots */}
+          <span className="absolute w-3 h-3 bg-green-300 rounded-full left-2 top-8"></span>
+          <span className="absolute w-2 h-2 bg-green-200 rounded-full right-8 top-4"></span>
+          <span className="absolute w-2 h-2 bg-green-200 rounded-full left-10 bottom-10"></span>
+          <span className="absolute w-2 h-2 bg-green-200 rounded-full right-8 bottom-8"></span>
+          <span className="absolute w-2 h-2 bg-green-400 rounded-full left-1/2 top-1/4"></span>
+
+          {/* Tabs */}
+          <div className="mb-8 text-center flex flex-col items-center">
+            <div className="flex gap-8 mb-2">
+              <button
+                className={`text-lg font-semibold pb-1 transition-all ${
+                  currentView === "login"
+                    ? "text-green-600 border-b-2 border-green-500"
+                    : "text-gray-400 border-b-2 border-transparent"
+                }`}
+                onClick={() => setCurrentView("login")}
+              >
+                Log in
+              </button>
+              <button
+                className={`text-lg font-semibold pb-1 transition-all ${
+                  currentView === "signup"
+                    ? "text-green-600 border-b-2 border-green-500"
+                    : "text-gray-400 border-b-2 border-transparent"
+                }`}
+                onClick={() => setCurrentView("signup")}
+              >
+                Sign Up
+              </button>
+            </div>
           </div>
 
-          {currentView === "login" ? <LoginForm onLogin={handleLogin} /> : <SignupForm onSignup={handleLogin} />}
-
-          <div className="mt-6 text-center">
-            <Button
-              variant="link"
-              onClick={() => setCurrentView(currentView === "login" ? "signup" : "login")}
-              className="text-sm"
-            >
-              {currentView === "login" ? "Don't have an account? Sign up" : "Already have an account? Login"}
-            </Button>
+          {/* Form */}
+          <div>
+            {currentView === "login" ? <LoginForm onLogin={handleLogin} /> : <SignupForm onSignup={handleLogin} />}
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Footer */}
+          <div className="text-center text-sm text-gray-400 mt-8">
+            {currentView === "login" ? (
+              <>
+                Don't have any account?{" "}
+                <button
+                  className="text-green-600 font-semibold hover:underline"
+                  onClick={() => setCurrentView("signup")}
+                >
+                  Sign Up
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <button
+                  className="text-green-600 font-semibold hover:underline"
+                  onClick={() => setCurrentView("login")}
+                >
+                  Log in
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Terms */}
+          <p className="text-xs text-gray-400 text-center mt-6">
+            By continuing, you agree to our Terms of Service and Privacy Policy
+          </p>
+        </div>
+      </div>
     </div>
   )
 }

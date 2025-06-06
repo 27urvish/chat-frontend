@@ -48,6 +48,7 @@ body {
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+
   .dark {
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
@@ -88,7 +89,22 @@ body {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+}
+
+.left-bg {
+  background: radial-gradient(circle at 30% 30%, #a1c4fd 0%, #c2e9fb 100%), linear-gradient(135deg, #7f7fd5 0%, #86a8e7 50%, #91eac9 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.blur-circle {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(24px);
+  opacity: 0.5;
+  z-index: 0;
 }

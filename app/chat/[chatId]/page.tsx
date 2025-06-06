@@ -1,4 +1,3 @@
-
 "use client"
 
 import type React from "react"
@@ -13,6 +12,8 @@ import { ArrowLeft, Phone, Video, MoreVertical, Send, Smile, Paperclip, Mic } fr
 import axiosInstance from "@/axios/axios"
 import { io } from "socket.io-client"
 import VideoCallModal from "@/components/video-call-modal"
+import axios from "axios"
+import VoiceModal from "@/components/voice-modal"
 
 interface ChatData {
   id: string
@@ -40,7 +41,9 @@ export default function ChatPage() {
   const [chatData, setChatData] = useState<ChatData | null>(null)
   const [isTyping, setIsTyping] = useState(false)
   const [socketMessages, setSocketMessages] = useState<any[]>([])
-
+  const [sourceImage, setSourceImage] = useState<File | null>(null)
+  const [targetImage, setTargetImage] = useState<File | null>(null)
+  const [resultUrl, setResultUrl] = useState<string>("")
   // Video call states
   const [callState, setCallState] = useState<CallState>({
     isInCall: false,
@@ -49,6 +52,18 @@ export default function ChatPage() {
     callType: null,
     remoteUserId: null,
   })
+
+  const [showVoiceModal, setShowVoiceModal] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const [transcript, setTranscript] = useState("")
+  // Add SpeechRecognition type for TypeScript
+  type SpeechRecognitionType = typeof window extends { SpeechRecognition: infer T }
+    ? T
+    : typeof window extends { webkitSpeechRecognition: infer T }
+    ? T
+    : any
+  
+    const [recognition, setRecognition] = useState<InstanceType<SpeechRecognitionType> | null>(null)
 
   // WebRTC refs
   const localVideoRef = useRef<HTMLVideoElement>(null) as React.RefObject<HTMLVideoElement>
@@ -61,6 +76,31 @@ export default function ChatPage() {
   })
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  const updloadImage = async (file: File, type: "source" | "target") => {
+    if (!sourceImage || !targetImage) return alert("Both images are required")
+
+    const formData = new FormData()
+    formData.append("source", sourceImage)
+    formData.append("target", targetImage)
+
+    setResultUrl("")
+
+    try {
+      const response = await axios.post("http://192.168.33.36:5000/api/face-swap", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      })
+      setResultUrl(response.data.result)
+    } catch (err: any) {
+      console.error("Face swap failed:", err)
+      alert("Face swap failed")
+    } finally {
+    }
+  }
+  useEffect(() => {
+    if (sourceImage && targetImage) {
+      updloadImage(sourceImage, "source")
+    }
+  }, [sourceImage, targetImage])
   // Initialize socket connection
   useEffect(() => {
     if (!socket) {
@@ -191,6 +231,86 @@ export default function ChatPage() {
     } catch (error) {
       console.error("❌ Error fetching chat data:", error)
     }
+  }
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && ("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      const recognitionInstance = new SpeechRecognition()
+
+      recognitionInstance.continuous = true
+      recognitionInstance.interimResults = true
+      recognitionInstance.lang = "en-US"
+
+      recognitionInstance.onresult = (event: { resultIndex: any; results: string | any[] }) => {
+        let finalTranscript = ""
+        let interimTranscript = ""
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript
+          } else {
+            interimTranscript += transcript
+          }
+        }
+
+        setTranscript(finalTranscript + interimTranscript)
+      }
+
+      recognitionInstance.onend = () => {
+        setIsListening(false)
+      }
+
+      recognitionInstance.onerror = (event: { error: any }) => {
+        console.error("Speech recognition error:", event.error)
+        setIsListening(false)
+      }
+
+      setRecognition(recognitionInstance)
+    }
+  }, [])
+
+  const startListening = () => {
+    if (recognition) {
+      setTranscript("")
+      recognition.start()
+      setIsListening(true)
+    } else {
+      alert("Speech recognition is not supported in your browser")
+    }
+  }
+
+  const stopListening = () => {
+    if (recognition) {
+      recognition.stop()
+      setIsListening(false)
+
+      // Auto-send the message after a short delay to ensure transcript is complete
+      setTimeout(() => {
+        if (transcript.trim() && socket) {
+          socket.emit("sendMessage", {
+            sender: user,
+            recipient: chatId,
+            content: transcript.trim(),
+            timestamp: new Date().toISOString(),
+          })
+          setShowVoiceModal(false)
+          setTranscript("")
+        }
+      }, 300)
+    }
+  }
+
+  const handleVoiceModalOpen = () => {
+    setShowVoiceModal(true)
+    setTranscript("")
+  }
+
+  const handleVoiceModalClose = () => {
+    setShowVoiceModal(false)
+    stopListening()
+    setTranscript("")
   }
 
   // WebRTC Functions
@@ -422,6 +542,10 @@ export default function ChatPage() {
     }
   }
 
+  const handleMicClick = () => {
+    handleVoiceModalOpen()
+  }
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
@@ -470,11 +594,195 @@ export default function ChatPage() {
       </div>
     )
   }
+  //   <div className="min-h-screen bg-gray-50 flex flex-col">
+  //     {/* Header */}
+  //     <input
+  //       type="file"
+  //       accept="image/*"
+  //       onChange={(e) => setSourceImage(e.target.files?.[0] || null)}
+  //       className="border p-2 w-full"
+  //     />
+  //     <input
+  //       type="file"
+  //       accept="image/*"
+  //       onChange={(e) => setTargetImage(e.target.files?.[0] || null)}
+  //       className="border p-2 w-full"
+  //     />
+  //     <header className="bg-gray-100 border-b border-gray-200 p-4">
+  //       <div className="flex items-center gap-3">
+  //         <Link href="/chat">
+  //           <Button variant="ghost" size="sm">
+  //             <ArrowLeft className="w-5 h-5" />
+  //           </Button>
+  //         </Link>
+
+  //         <div className="relative">
+  //           <Avatar className="w-12 h-12 bg-slate-500">
+  //             <AvatarFallback className="text-lg bg-pink-500">
+  //               {chatUser?.username
+  //                 ?.split(" ")
+  //                 .map((word: string) => word[0])
+  //                 .slice(0, 2)
+  //                 .join("")
+  //                 .toUpperCase()}
+  //             </AvatarFallback>
+  //           </Avatar>
+  //           {chatUser?.isOnline && (
+  //             <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+  //           )}
+  //         </div>
+
+  //         <div className="flex-1">
+  //           <h2 className="font-medium text-gray-900">{chatUser.username}</h2>
+  //           <p className="text-sm text-gray-500">{chatUser?.isOnline ? "online" : "last seen recently"}</p>
+  //         </div>
+
+  //         <div className="flex items-center gap-2">
+  //           <Button
+  //             variant="ghost"
+  //             size="sm"
+  //             onClick={() => startCall("audio")}
+  //             disabled={callState.isInCall || callState.isInitiating || callState.isReceiving}
+  //             title="Voice call"
+  //           >
+  //             <Phone className="w-5 h-5" />
+  //           </Button>
+  //           <Button
+  //             variant="ghost"
+  //             size="sm"
+  //             onClick={() => startCall("video")}
+  //             disabled={callState.isInCall || callState.isInitiating || callState.isReceiving}
+  //             title="Video call"
+  //           >
+  //             <Video className="w-5 h-5" />
+  //           </Button>
+  //           <Button variant="ghost" size="sm">
+  //             <MoreVertical className="w-5 h-5" />
+  //           </Button>
+  //         </div>
+  //       </div>
+  //     </header>
+
+  //     {/* Messages */}
+  //     <div className="flex-1 overflow-y-auto p-4 space-y-4">
+  //       {socketMessages?.length === 0 && (
+  //         <div className="text-center py-12">
+  //           <Avatar className="w-20 h-20 mx-auto mb-4 bg-slate-500">
+  //             <AvatarFallback className="text-2xl bg-pink-500">
+  //               {chatUser?.username
+  //                 ?.split(" ")
+  //                 .map((word: string) => word[0])
+  //                 .slice(0, 2)
+  //                 .join("")
+  //                 .toUpperCase()}
+  //             </AvatarFallback>
+  //           </Avatar>
+  //           <h3 className="text-lg font-medium text-gray-900 mb-2">{chatUser.username}</h3>
+  //           <p className="text-gray-500">Start a conversation</p>
+  //         </div>
+  //       )}
+
+  //       {socketMessages?.map((message, index) => (
+  //         <div
+  //           key={message._id || index}
+  //           className={`flex ${message?.sender === user ? "justify-end" : "justify-start"}`}
+  //         >
+  //           <div
+  //             className={`max-w-xs sm:max-w-md lg:max-w-lg rounded-lg px-3 py-2 relative ${
+  //               message.sender === user ? "bg-green-500 text-white" : "bg-white border border-gray-200 text-gray-900"
+  //             }`}
+  //           >
+  //             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+  //             <div className={`text-xs mt-1 ${message.sender === user ? "text-green-100" : "text-gray-500"}`}>
+  //               {message.timestamp ? formatTime(new Date(message.timestamp)) : formatTime(new Date())}
+  //             </div>
+
+  //             {/* Message tail */}
+  //             <div
+  //               className={`absolute top-0 w-0 h-0 ${
+  //                 message.sender === user
+  //                   ? "right-[-8px] border-l-[8px] border-l-green-500 border-t-[8px] border-t-transparent"
+  //                   : "left-[-8px] border-r-[8px] border-r-white border-t-[8px] border-t-transparent"
+  //               }`}
+  //             />
+  //           </div>
+  //         </div>
+  //       ))}
+
+  //       {(isLoading || isTyping) && (
+  //         <div className="flex justify-start">
+  //           <div className="bg-white border border-gray-200 rounded-lg px-3 py-2">
+  //             <div className="flex gap-1">
+  //               <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+  //               <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+  //               <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+  //             </div>
+  //           </div>
+  //         </div>
+  //       )}
+
+  //       <div ref={messagesEndRef} />
+  //     </div>
+
+  //     {/* Message Input */}
+  //     <div className="bg-gray-100 p-4">
+  //       <form onSubmit={onSubmit} className="flex items-center gap-2">
+  //         <Button type="button" variant="ghost" size="sm">
+  //           <Smile className="w-5 h-5" />
+  //         </Button>
+  //         <Button type="button" variant="ghost" size="sm">
+  //           <Paperclip className="w-5 h-5" />
+  //         </Button>
+
+  //         <Input
+  //           value={input}
+  //           onChange={handleInputChange}
+  //           placeholder="Type a message"
+  //           disabled={isLoading}
+  //           className="flex-1 bg-white"
+  //         />
+
+  //         {input.trim() ? (
+  //           <Button type="submit" disabled={isLoading} className="bg-green-600 hover:bg-green-700">
+  //             <Send className="w-4 h-4" />
+  //           </Button>
+  //         ) : (
+  //           <Button type="button" variant="ghost" size="sm" onClick={handleMicClick}>
+  //             <Mic className="w-5 h-5" />
+  //           </Button>
+  //         )}
+  //       </form>
+  //     </div>
+
+  //     {/* Video Call Modal */}
+  //     <VideoCallModal
+  //       callState={callState}
+  //       chatUser={chatUser}
+  //       localVideoRef={localVideoRef}
+  //       remoteVideoRef={remoteVideoRef}
+  //       onAcceptCall={acceptCall}
+  //       onRejectCall={rejectCall}
+  //       onEndCall={endCall}
+  //     />
+
+  //     {/* Voice Modal */}
+  //     <VoiceModal
+  //       isOpen={showVoiceModal}
+  //       onClose={handleVoiceModalClose}
+  //       isListening={isListening}
+  //       transcript={transcript}
+  //       onStartListening={startListening}
+  //       onStopListening={stopListening}
+  //     />
+  //   </div>
+  // )
+
+  // ...existing code...
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <header className="bg-gray-100 border-b border-gray-200 p-4">
+    <div className="min-h-screen bg-gray-50 flex flex-col relative">
+      {/* Header - Fixed Top */}
+      <header className="bg-gray-100 border-b border-gray-200 p-4 fixed top-0 left-0 right-0 z-20">
         <div className="flex items-center gap-3">
           <Link href="/chat">
             <Button variant="ghost" size="sm">
@@ -530,7 +838,8 @@ export default function ChatPage() {
       </header>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4"
+        style={{ paddingTop: 140, paddingBottom: 90 }}>
         {socketMessages?.length === 0 && (
           <div className="text-center py-12">
             <Avatar className="w-20 h-20 mx-auto mb-4 bg-slate-500">
@@ -562,8 +871,6 @@ export default function ChatPage() {
               <div className={`text-xs mt-1 ${message.sender === user ? "text-green-100" : "text-gray-500"}`}>
                 {message.timestamp ? formatTime(new Date(message.timestamp)) : formatTime(new Date())}
               </div>
-
-              {/* Message tail */}
               <div
                 className={`absolute top-0 w-0 h-0 ${
                   message.sender === user
@@ -590,8 +897,8 @@ export default function ChatPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Message Input */}
-      <div className="bg-gray-100 p-4">
+      {/* Message Input - Fixed Bottom */}
+      <div className="bg-gray-100 p-4 fixed bottom-0 left-0 right-0 z-20">
         <form onSubmit={onSubmit} className="flex items-center gap-2">
           <Button type="button" variant="ghost" size="sm">
             <Smile className="w-5 h-5" />
@@ -613,7 +920,7 @@ export default function ChatPage() {
               <Send className="w-4 h-4" />
             </Button>
           ) : (
-            <Button type="button" variant="ghost" size="sm">
+            <Button type="button" variant="ghost" size="sm" onClick={handleMicClick}>
               <Mic className="w-5 h-5" />
             </Button>
           )}
@@ -630,6 +937,17 @@ export default function ChatPage() {
         onRejectCall={rejectCall}
         onEndCall={endCall}
       />
+
+      {/* Voice Modal */}
+      <VoiceModal
+        isOpen={showVoiceModal}
+        onClose={handleVoiceModalClose}
+        isListening={isListening}
+        transcript={transcript}
+        onStartListening={startListening}
+        onStopListening={stopListening}
+      />
     </div>
   )
+
 }

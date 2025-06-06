@@ -67,6 +67,7 @@ export default function VideoCallModal({
       <div
         className={`relative w-full h-full ${isFullscreen ? "" : "max-w-4xl max-h-3xl"} bg-gray-900 rounded-lg overflow-hidden`}
       >
+        
         {/* Incoming Call Screen */}
         {callState.isReceiving && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-blue-600 to-blue-800 text-white">
