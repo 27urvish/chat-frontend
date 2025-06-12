@@ -41,7 +41,7 @@ import axios from "axios"
 const axiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || "https://chat-backend-nskn.onrender.com/api",
   //   withCredentials: true, // send cookies
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     "Content-Type": "application/json",
   },

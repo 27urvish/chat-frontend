@@ -14,6 +14,9 @@ import { io } from "socket.io-client"
 import VideoCallModal from "@/components/video-call-modal"
 import axios from "axios"
 import VoiceModal from "@/components/voice-modal"
+import MessageItem from "@/components/message-item"
+import { AttachmentMenu } from "@/components/attachment-menu"
+import { FilePreview } from "@/components/file-preview"
 
 interface ChatData {
   id: string
@@ -44,6 +47,7 @@ export default function ChatPage() {
   const [sourceImage, setSourceImage] = useState<File | null>(null)
   const [targetImage, setTargetImage] = useState<File | null>(null)
   const [resultUrl, setResultUrl] = useState<string>("")
+  console.log(socketMessages, "socketMessages")
   // Video call states
   const [callState, setCallState] = useState<CallState>({
     isInCall: false,
@@ -52,6 +56,11 @@ export default function ChatPage() {
     callType: null,
     remoteUserId: null,
   })
+
+  // File attachment states
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [isUploading, setIsUploading] = useState(false)
 
   const [showVoiceModal, setShowVoiceModal] = useState(false)
   const [isListening, setIsListening] = useState(false)
@@ -62,8 +71,8 @@ export default function ChatPage() {
     : typeof window extends { webkitSpeechRecognition: infer T }
     ? T
     : any
-  
-    const [recognition, setRecognition] = useState<InstanceType<SpeechRecognitionType> | null>(null)
+
+  const [recognition, setRecognition] = useState<InstanceType<SpeechRecognitionType> | null>(null)
 
   // WebRTC refs
   const localVideoRef = useRef<HTMLVideoElement>(null) as React.RefObject<HTMLVideoElement>
@@ -102,6 +111,7 @@ export default function ChatPage() {
     }
   }, [sourceImage, targetImage])
   // Initialize socket connection
+
   useEffect(() => {
     if (!socket) {
       socket = io("https://chat-backend-nskn.onrender.com", {
@@ -214,6 +224,78 @@ export default function ChatPage() {
     fetchMessages(savedUser, chatId)
   }, [router, chatId])
 
+  // File handling functions
+  const handleFileSelect = async (file: File, type: string) => {
+    if (!file) return
+    setSelectedFiles((prev) => [...prev, file])
+    setShowAttachmentMenu(false)
+  }
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const uploadAndSendFile = async (file: File, type: string) => {
+    if (!user || !chatId) return
+    setIsUploading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("userId", user)
+      formData.append("chatId", chatId)
+      formData.append("fileType", type)
+
+      const response = await fetch("http://localhost:5000/api/chat/upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error("Upload failed")
+      }
+
+      const result = await response.json()
+
+      // Send message with file attachment
+      if (socket) {
+        socket.emit("sendMessage", {
+          sender: user,
+          recipient: chatId,
+          content: `📎 ${result.fileName}`,
+          fileUrl: result.fileUrl,
+          fileName: result.fileName,
+          fileType: result.fileType,
+          fileSize: result.fileSize,
+          timestamp: new Date().toISOString(),
+        })
+      }
+
+      // Remove file from preview after successful upload
+      setSelectedFiles((prev) => prev.filter((f) => f !== file))
+    } catch (error) {
+      console.error("File upload error:", error);
+      alert("Failed to upload file")
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const sendSelectedFiles = async () => {
+    if (selectedFiles.length === 0) return
+
+    for (const file of selectedFiles) {
+      const type = file.type.startsWith("image/") ? "image" : file.type.startsWith("audio/") ? "audio" : "document"
+      await uploadAndSendFile(file, type)
+    }
+
+    setSelectedFiles([])
+  }
+
+  const handleAttachmentClick = () => {
+    setShowAttachmentMenu(!showAttachmentMenu)
+  }
+
   const fetchMessages = async (userId: string, chatUserId: string) => {
     try {
       const res = await axiosInstance.get(`/messages/${userId}/${chatUserId}`)
@@ -265,6 +347,9 @@ export default function ChatPage() {
       recognitionInstance.onerror = (event: { error: any }) => {
         console.error("Speech recognition error:", event.error)
         setIsListening(false)
+        if (event.error === "not-allowed") {
+          alert("Microphone access was denied. Please allow microphone access in your browser settings.")
+        }
       }
 
       setRecognition(recognitionInstance)
@@ -348,6 +433,20 @@ export default function ChatPage() {
     try {
       console.log(`📞 Starting ${callType} call to:`, chatId)
 
+      // Check available devices
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const hasAudio = devices.some(d => d.kind === "audioinput")
+      const hasVideo = devices.some(d => d.kind === "videoinput")
+
+      if (callType === "audio" && !hasAudio) {
+        alert("No microphone found. Please connect a microphone and try again.")
+        return
+      }
+      if (callType === "video" && !hasVideo) {
+        alert("No camera found. Please connect a camera and try again.")
+        return
+      }
+
       setCallState({
         isInCall: false,
         isInitiating: true,
@@ -358,8 +457,8 @@ export default function ChatPage() {
 
       // Get user media
       const constraints = {
-        audio: true,
-        video: callType === "video",
+        audio: hasAudio,
+        video: callType === "video" && hasVideo,
       }
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
@@ -385,9 +484,15 @@ export default function ChatPage() {
           callType,
         })
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Error starting call:", error)
-      alert("Failed to start call. Please check your camera/microphone permissions.")
+      if (error.name === "NotFoundError") {
+        alert("Required device not found. Please check your camera/microphone.")
+      } else if (error.name === "NotAllowedError") {
+        alert("Permission denied. Please allow access to your camera/microphone.")
+      } else {
+        alert(error.message || "Failed to start call. Please check your camera/microphone permissions.")
+      }
       endCall()
     }
   }
@@ -594,190 +699,7 @@ export default function ChatPage() {
       </div>
     )
   }
-  //   <div className="min-h-screen bg-gray-50 flex flex-col">
-  //     {/* Header */}
-  //     <input
-  //       type="file"
-  //       accept="image/*"
-  //       onChange={(e) => setSourceImage(e.target.files?.[0] || null)}
-  //       className="border p-2 w-full"
-  //     />
-  //     <input
-  //       type="file"
-  //       accept="image/*"
-  //       onChange={(e) => setTargetImage(e.target.files?.[0] || null)}
-  //       className="border p-2 w-full"
-  //     />
-  //     <header className="bg-gray-100 border-b border-gray-200 p-4">
-  //       <div className="flex items-center gap-3">
-  //         <Link href="/chat">
-  //           <Button variant="ghost" size="sm">
-  //             <ArrowLeft className="w-5 h-5" />
-  //           </Button>
-  //         </Link>
 
-  //         <div className="relative">
-  //           <Avatar className="w-12 h-12 bg-slate-500">
-  //             <AvatarFallback className="text-lg bg-pink-500">
-  //               {chatUser?.username
-  //                 ?.split(" ")
-  //                 .map((word: string) => word[0])
-  //                 .slice(0, 2)
-  //                 .join("")
-  //                 .toUpperCase()}
-  //             </AvatarFallback>
-  //           </Avatar>
-  //           {chatUser?.isOnline && (
-  //             <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-  //           )}
-  //         </div>
-
-  //         <div className="flex-1">
-  //           <h2 className="font-medium text-gray-900">{chatUser.username}</h2>
-  //           <p className="text-sm text-gray-500">{chatUser?.isOnline ? "online" : "last seen recently"}</p>
-  //         </div>
-
-  //         <div className="flex items-center gap-2">
-  //           <Button
-  //             variant="ghost"
-  //             size="sm"
-  //             onClick={() => startCall("audio")}
-  //             disabled={callState.isInCall || callState.isInitiating || callState.isReceiving}
-  //             title="Voice call"
-  //           >
-  //             <Phone className="w-5 h-5" />
-  //           </Button>
-  //           <Button
-  //             variant="ghost"
-  //             size="sm"
-  //             onClick={() => startCall("video")}
-  //             disabled={callState.isInCall || callState.isInitiating || callState.isReceiving}
-  //             title="Video call"
-  //           >
-  //             <Video className="w-5 h-5" />
-  //           </Button>
-  //           <Button variant="ghost" size="sm">
-  //             <MoreVertical className="w-5 h-5" />
-  //           </Button>
-  //         </div>
-  //       </div>
-  //     </header>
-
-  //     {/* Messages */}
-  //     <div className="flex-1 overflow-y-auto p-4 space-y-4">
-  //       {socketMessages?.length === 0 && (
-  //         <div className="text-center py-12">
-  //           <Avatar className="w-20 h-20 mx-auto mb-4 bg-slate-500">
-  //             <AvatarFallback className="text-2xl bg-pink-500">
-  //               {chatUser?.username
-  //                 ?.split(" ")
-  //                 .map((word: string) => word[0])
-  //                 .slice(0, 2)
-  //                 .join("")
-  //                 .toUpperCase()}
-  //             </AvatarFallback>
-  //           </Avatar>
-  //           <h3 className="text-lg font-medium text-gray-900 mb-2">{chatUser.username}</h3>
-  //           <p className="text-gray-500">Start a conversation</p>
-  //         </div>
-  //       )}
-
-  //       {socketMessages?.map((message, index) => (
-  //         <div
-  //           key={message._id || index}
-  //           className={`flex ${message?.sender === user ? "justify-end" : "justify-start"}`}
-  //         >
-  //           <div
-  //             className={`max-w-xs sm:max-w-md lg:max-w-lg rounded-lg px-3 py-2 relative ${
-  //               message.sender === user ? "bg-green-500 text-white" : "bg-white border border-gray-200 text-gray-900"
-  //             }`}
-  //           >
-  //             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-  //             <div className={`text-xs mt-1 ${message.sender === user ? "text-green-100" : "text-gray-500"}`}>
-  //               {message.timestamp ? formatTime(new Date(message.timestamp)) : formatTime(new Date())}
-  //             </div>
-
-  //             {/* Message tail */}
-  //             <div
-  //               className={`absolute top-0 w-0 h-0 ${
-  //                 message.sender === user
-  //                   ? "right-[-8px] border-l-[8px] border-l-green-500 border-t-[8px] border-t-transparent"
-  //                   : "left-[-8px] border-r-[8px] border-r-white border-t-[8px] border-t-transparent"
-  //               }`}
-  //             />
-  //           </div>
-  //         </div>
-  //       ))}
-
-  //       {(isLoading || isTyping) && (
-  //         <div className="flex justify-start">
-  //           <div className="bg-white border border-gray-200 rounded-lg px-3 py-2">
-  //             <div className="flex gap-1">
-  //               <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-  //               <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
-  //               <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
-  //             </div>
-  //           </div>
-  //         </div>
-  //       )}
-
-  //       <div ref={messagesEndRef} />
-  //     </div>
-
-  //     {/* Message Input */}
-  //     <div className="bg-gray-100 p-4">
-  //       <form onSubmit={onSubmit} className="flex items-center gap-2">
-  //         <Button type="button" variant="ghost" size="sm">
-  //           <Smile className="w-5 h-5" />
-  //         </Button>
-  //         <Button type="button" variant="ghost" size="sm">
-  //           <Paperclip className="w-5 h-5" />
-  //         </Button>
-
-  //         <Input
-  //           value={input}
-  //           onChange={handleInputChange}
-  //           placeholder="Type a message"
-  //           disabled={isLoading}
-  //           className="flex-1 bg-white"
-  //         />
-
-  //         {input.trim() ? (
-  //           <Button type="submit" disabled={isLoading} className="bg-green-600 hover:bg-green-700">
-  //             <Send className="w-4 h-4" />
-  //           </Button>
-  //         ) : (
-  //           <Button type="button" variant="ghost" size="sm" onClick={handleMicClick}>
-  //             <Mic className="w-5 h-5" />
-  //           </Button>
-  //         )}
-  //       </form>
-  //     </div>
-
-  //     {/* Video Call Modal */}
-  //     <VideoCallModal
-  //       callState={callState}
-  //       chatUser={chatUser}
-  //       localVideoRef={localVideoRef}
-  //       remoteVideoRef={remoteVideoRef}
-  //       onAcceptCall={acceptCall}
-  //       onRejectCall={rejectCall}
-  //       onEndCall={endCall}
-  //     />
-
-  //     {/* Voice Modal */}
-  //     <VoiceModal
-  //       isOpen={showVoiceModal}
-  //       onClose={handleVoiceModalClose}
-  //       isListening={isListening}
-  //       transcript={transcript}
-  //       onStartListening={startListening}
-  //       onStopListening={stopListening}
-  //     />
-  //   </div>
-  // )
-
-  // ...existing code...
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col relative">
@@ -857,30 +779,32 @@ export default function ChatPage() {
           </div>
         )}
 
+
         {socketMessages?.map((message, index) => (
           <div
             key={message._id || index}
             className={`flex ${message?.sender === user ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-xs sm:max-w-md lg:max-w-lg rounded-lg px-3 py-2 relative ${
-                message.sender === user ? "bg-green-500 text-white" : "bg-white border border-gray-200 text-gray-900"
-              }`}
+              className={`max-w-xs sm:max-w-md lg:max-w-lg rounded-lg px-3 py-2 relative ${message.sender === user ? "bg-green-500 text-white" : "bg-white border border-gray-200 text-gray-900"
+                }`}
             >
               <p className="text-sm whitespace-pre-wrap">{message.content}</p>
               <div className={`text-xs mt-1 ${message.sender === user ? "text-green-100" : "text-gray-500"}`}>
                 {message.timestamp ? formatTime(new Date(message.timestamp)) : formatTime(new Date())}
               </div>
               <div
-                className={`absolute top-0 w-0 h-0 ${
-                  message.sender === user
+                className={`absolute top-0 w-0 h-0 ${message.sender === user
                     ? "right-[-8px] border-l-[8px] border-l-green-500 border-t-[8px] border-t-transparent"
                     : "left-[-8px] border-r-[8px] border-r-white border-t-[8px] border-t-transparent"
-                }`}
+                  }`}
               />
             </div>
           </div>
         ))}
+        {/* {socketMessages?.map((message, index) => (
+          <MessageItem key={message._id || index} message={message} currentUser={user} />
+        ))} */}
 
         {(isLoading || isTyping) && (
           <div className="flex justify-start">
@@ -897,13 +821,27 @@ export default function ChatPage() {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* File Previews */}
+      {selectedFiles.length > 0 && (
+        <div className="bg-gray-50 p-2 border-t fixed bottom-16 left-0 right-0 z-10 max-h-32 overflow-y-auto">
+          {selectedFiles.map((file, index) => (
+            <FilePreview
+              key={index}
+              file={file}
+              type={file.type.startsWith("image/") ? "image" : "document"}
+              onRemove={() => handleRemoveFile(index)}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Message Input - Fixed Bottom */}
       <div className="bg-gray-100 p-4 fixed bottom-0 left-0 right-0 z-20">
         <form onSubmit={onSubmit} className="flex items-center gap-2">
           <Button type="button" variant="ghost" size="sm">
             <Smile className="w-5 h-5" />
           </Button>
-          <Button type="button" variant="ghost" size="sm">
+          <Button type="button" variant="ghost" size="sm" onClick={handleAttachmentClick}>
             <Paperclip className="w-5 h-5" />
           </Button>
 
@@ -915,8 +853,21 @@ export default function ChatPage() {
             className="flex-1 bg-white"
           />
 
-          {input.trim() ? (
-            <Button type="submit" disabled={isLoading} className="bg-green-600 hover:bg-green-700">
+          {/* {input.trim() ? (
+            <Button type="submit" disabled={isLoading} className="bg-green-600 hover:bg-green-700"> */}
+          {input.trim() || selectedFiles.length > 0 ? (
+
+            <Button
+
+              type={input.trim() ? "submit" : "button"}
+
+              onClick={input.trim() ? undefined : sendSelectedFiles}
+
+              className="bg-green-600 hover:bg-green-700"
+
+              disabled={isUploading}
+
+            >
               <Send className="w-4 h-4" />
             </Button>
           ) : (
@@ -926,6 +877,13 @@ export default function ChatPage() {
           )}
         </form>
       </div>
+
+      {/* Attachment Menu */}
+      <AttachmentMenu
+        isOpen={showAttachmentMenu}
+        onClose={() => setShowAttachmentMenu(false)}
+        onFileSelect={handleFileSelect}
+      />
 
       {/* Video Call Modal */}
       <VideoCallModal
